@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<project
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+	xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.sap.sbo.product</groupId>
+	<artifactId>rabbitmq_test</artifactId>
+	<version>1.0.1</version>
+	<packaging>jar</packaging>
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.build.resourceEncoding>UTF-8</project.build.resourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<product.name>SAP Anywhere OCC</product.name>
+		<occ.component.version>N/A</occ.component.version>
+		<occ.groupId>com.sap.sbo.occ</occ.groupId>
+		<feed.groupId>com.sap.sbo.occ.feed</feed.groupId>
+		<mail.groupId>com.sap.sbo.occ.mail</mail.groupId>
+		<sld.groupId>com.sap.occ.businessone</sld.groupId>
+		<sp.groupId>com.sap.sbo.occ.sp</sp.groupId>
+		<frw.groupId>com.sap.sme.anw</frw.groupId>
+		<frw.version>3.2.0</frw.version>
+		<misc.library.version>${project.version}</misc.library.version>
+		<maven.test.skip>false</maven.test.skip>
+		<!-- Sonar analysis parameter -->
+		<sonar.cpd.java.minimumLines>8</sonar.cpd.java.minimumLines>
+		<!-- Plugins version control -->
+		<java.version>1.8</java.version>
+		<sonar.language>java</sonar.language>
+		<antrun.version>1.7</antrun.version>
+		<eclipselink.weave.plugin.version>1.0.4</eclipselink.weave.plugin.version>
+		<eclipselink.staticweave.plugin.version>1.0.0</eclipselink.staticweave.plugin.version>
+		<surefire.version>2.18.1</surefire.version>
+		<clean.version>2.5</clean.version>
+		<compiler.version>3.1</compiler.version>
+		<deploy.version>2.7</deploy.version>
+		<install.version>2.4</install.version>
+		<resource.version>2.6</resource.version>
+		<war.version>2.3</war.version>
+		<jar.version>2.4</jar.version>
+		<maven.plugin.version>3.0.4</maven.plugin.version>
+		<maven.source.plugin.version>2.2.1</maven.source.plugin.version>
+		<assembly.version>2.4</assembly.version>
+		<!-- Dependency version control -->
+		<ant.version>1.7.0</ant.version>
+		<occ.plugin.version>${project.version}</occ.plugin.version>
+		<sld.version>${project.version}</sld.version>
+		<aopalliance.version>1.0</aopalliance.version>
+		<apache.mime4j.version>0.7.2</apache.mime4j.version>
+		<aspectj.version>1.8.9</aspectj.version>
+		<cglib.version>2.2</cglib.version>
+		<cometd.version>2.4.2</cometd.version>
+		<commons.beanutils.version>1.8.3</commons.beanutils.version>
+		<commons.codec.version>1.6</commons.codec.version>
+		<commons.collections.version>3.2.2</commons.collections.version>
+		<commons.dbcp.version>1.4</commons.dbcp.version>
+		<commons.email.version>1.3.1</commons.email.version>
+		<commons.fileupload.version>1.3.1</commons.fileupload.version>
+		<commons.io.version>2.4</commons.io.version>
+		<commons.lang.version>2.6</commons.lang.version>
+		<commons.validator.version>1.4.0</commons.validator.version>
+		<core4j.version>0.5</core4j.version>
+		<eclipselink.version>2.6.2</eclipselink.version>
+		<equalsverifier.version>1.1.3</equalsverifier.version>
+		<freemarker.version>2.3.16</freemarker.version>
+		<geronimo.jpa.version>1.1</geronimo.jpa.version>
+		<geronimo.jta.version>1.1.1</geronimo.jta.version>
+		<gson.version>2.1</gson.version>
+		<httpcomponent.version>4.4.1</httpcomponent.version>
+		<hsqldb.version>2.2.8</hsqldb.version>
+		<jackson.version>1.9.3</jackson.version>
+		<fasterxml.version>2.7.3</fasterxml.version>
+		<javassist.version>3.12.1.GA</javassist.version>
+		<javamelody.version>1.43.0</javamelody.version>
+		<javax.mail.version>1.4.7</javax.mail.version>
+		<javax.persistence.version>2.1.0</javax.persistence.version>
+		<jetty.server.version>7.6.3.v20120416</jetty.server.version>
+		<joda.time.version>2.8.2</joda.time.version>
+		<jsoup.version>1.7.2</jsoup.version>
+		<jsp.api.version>2.1</jsp.api.version>
+		<jstl.version>1.2</jstl.version>
+		<junit.version>4.11</junit.version>
+		<kaptcha.version>2.3.2</kaptcha.version>
+		<janino.version>2.6.1</janino.version>
+		<mockito.version>1.9.5</mockito.version>
+		<jmockit.version>1.14</jmockit.version>
+		<ngdbc.version>1.97.2</ngdbc.version>
+		<poi.version>3.13</poi.version>
+		<powermock.version>1.5</powermock.version>
+		<rabbitmq.version>3.0.1</rabbitmq.version>
+		<sap.lps.version>1.0.1</sap.lps.version>
+		<sap.security.version>1.2.2</sap.security.version>
+		<servlet.api.version>3.0.1</servlet.api.version>
+		<slf4j.version>1.7.6</slf4j.version>
+		<spring.version>4.2.6.RELEASE</spring.version>
+		<spring.amqp.version>1.1.4.RELEASE</spring.amqp.version>
+		<spring.retry.version>1.0.2.RELEASE</spring.retry.version>
+		<sqljdbc.version>4.0</sqljdbc.version>
+		<mariadb.client.version>1.3.5</mariadb.client.version>
+		<standard.version>1.1.2</standard.version>
+		<tomcat.jdbc.version>8.0.32</tomcat.jdbc.version>
+		<velocity.version>1.7</velocity.version>
+		<guava.version>15.0</guava.version>
+		<commons.digester3.version>3.2</commons.digester3.version>
+		<groovy.version>2.3.4</groovy.version>
+		<swagger-core-version>1.5.0</swagger-core-version>
+		<junit.parallel.type>none</junit.parallel.type>
+		<junit.parallel.threadCount>1</junit.parallel.threadCount>
+		<pitest.version>1.1.5</pitest.version>
+	</properties>
+	<dependencies>
+		<!-- https://mvnrepository.com/artifact/logkit/logkit -->
+		<!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpclient -->
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+			<version>4.5.3</version>
+		</dependency>
+		<dependency>
+			<groupId>logkit</groupId>
+			<artifactId>logkit</artifactId>
+			<version>2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.rabbitmq</groupId>
+			<artifactId>amqp-client</artifactId>
+			<version>${rabbitmq.version}</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.apache.jmeter/ApacheJMeter_core -->
+		<dependency>
+			<groupId>org.apache.jmeter</groupId>
+			<artifactId>ApacheJMeter_core</artifactId>
+			<version>2.6</version>
+		</dependency>
+
+	</dependencies>
+</project>
