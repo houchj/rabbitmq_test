@@ -308,6 +308,11 @@ public class MQTest {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3);
 	}
 
+	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
+			String propertyName, Boolean expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4);
+	}
+	
 	private static boolean StringUtils_isEmpty(String str) {
 		return str == null || str.length() == 0;
 	}
@@ -343,6 +348,9 @@ public class MQTest {
 					break;
 				case 3:// Long
 					actualValue = object.get(propertyName).asLong();
+					break;
+				case 4:// Boolean
+					actualValue = object.get(propertyName).asBoolean();
 					break;
 				}
 				if (actualValue == null) {
