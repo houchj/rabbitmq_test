@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
@@ -13,6 +14,8 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.apache.jmeter.assertions.AssertionResult;
+import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.util.JMeterUtils;
 import org.apache.log.Logger;
 
@@ -24,11 +27,12 @@ import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 
+import com.eclipsesource.json.*;
 
 public class MQTest {
 
-	public static final int MQ_PORT = 5673; //5672 for CD
-	public static final String MQ_HOST = "localhost";//"rabbitmq"; for CD
+	public static final int MQ_PORT = 5673; // 5672 for CD
+	public static final String MQ_HOST = "localhost";// "rabbitmq"; for CD
 	public static final int INTERNAL_HTTP_PORT = 58080;
 
 	private static Connection mqConnection;
@@ -51,7 +55,8 @@ public class MQTest {
 		channel.abort();
 	}
 
-	public static String startMQ(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars) throws Exception {
+	public static String startMQ(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars)
+			throws Exception {
 		String ret = "";
 		boolean mqStarted = false;
 		try {
@@ -78,15 +83,16 @@ public class MQTest {
 		return ret;
 	}
 
-	private static void startAMQConnection(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars) throws Exception {
+	private static void startAMQConnection(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars)
+			throws Exception {
 		String host = vars.get("MQTest.mqhost");
-		if(host != null && host.length() > 0) {
+		if (host != null && host.length() > 0) {
 			logger.info("got host " + host + " from user defined variable...");
 		} else {
 			logger.info("NO host " + host + " from user defined variable, user localhost as default");
 			host = MQ_HOST;
 		}
-		
+
 		String port = vars.get("MQTest.mqport");
 		int intPort = 0;
 		try {
@@ -94,14 +100,14 @@ public class MQTest {
 		} catch (NumberFormatException e) {
 			logger.warn(e.getMessage(), e);
 		}
-		
-		if(intPort <= 0) {
+
+		if (intPort <= 0) {
 			logger.info("incorrect port from user defined variable, use 5673 as default");
 			intPort = MQ_PORT;
 		} else {
 			logger.info("got port " + intPort + " from user defined variable...");
 		}
-		
+
 		ConnectionFactory factory = new ConnectionFactory();
 		factory.setHost(host);
 		factory.setPort(intPort);
@@ -263,6 +269,118 @@ public class MQTest {
 		} finally {
 			httpclient.close();
 		}
+	}
+
+	///////////////////////////////// Assertion Utils
+	///////////////////////////////// /////////////////////////////////////////
+	public static boolean assertCount(final SampleResult result, final Logger logger, String message, int count)
+			throws Exception {
+		JsonArray array = Json.parse(message).asArray();
+		int size = array.size();
+		if (size != count) {
+			result.setSuccessful(false);
+			result.setResponseCode("400");
+			String info = "expecting " + count + " messages, but got only " + size;
+			result.setResponseMessage(info);
+			logger.info(info);
+			return false;
+		} else {
+			result.setSuccessful(true);
+			result.setResponseCode("200");
+			String info = "there are " + count + " messages.";
+			logger.info(info);
+			return true;
+		}
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
+			String propertyName, String expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1);
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
+			String propertyName, Integer expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2);
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
+			String propertyName, Long expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3);
+	}
+
+	private static boolean StringUtils_isEmpty(String str) {
+		return str == null || str.length() == 0;
+	}
+
+	private static boolean assertProperty_Internal(final SampleResult result, final Logger logger, String message,
+			String propertyName, Object expectedValue, int type) throws Exception {
+		if (StringUtils_isEmpty(propertyName) || result == null || logger == null || StringUtils_isEmpty(message)) {
+			String info = "incorrect null parameters passed, the first 4 parameters are mandatory!!!";
+			if (logger != null) {
+				logger.warn(info);
+			}
+			if (result != null) {
+				result.setSuccessful(false);
+				result.setResponseCode("400");
+				result.setResponseMessage(info);
+			}
+			return false;
+		}
+		boolean found = false;
+		boolean foundProp = false;
+		Object actualValue = null;
+		JsonArray array = Json.parse(message).asArray();
+		for (int i = 0; i < array.size(); i++) {
+			JsonObject object = array.get(i).asObject();
+			if (object.names().contains(propertyName)) {
+				foundProp = true;
+				switch (type) {
+				case 1:// String
+					actualValue = object.get(propertyName).asString();
+					break;
+				case 2:// Integer
+					actualValue = object.get(propertyName).asInt();
+					break;
+				case 3:// Long
+					actualValue = object.get(propertyName).asLong();
+					break;
+				}
+				if (actualValue == null) {
+					if (expectedValue == null) {
+						logger.info("asseting " + propertyName + ", and both are null.");
+						found = true;
+					} else {
+						logger.info("asseting " + propertyName + ", but got null.");
+					}
+				} else {
+					if (actualValue.equals(expectedValue)) {
+						found = true;
+					}
+				}
+			} else {
+				if (!found) {
+					continue;
+				} else {
+					break;
+				}
+			}
+		}
+		if (found) {
+			result.setSuccessful(true);
+			result.setResponseCode("200");
+		} else {
+			result.setSuccessful(false);
+			result.setResponseCode("400");
+			String info;
+			if (foundProp) {
+				info = "expect the " + propertyName + " as " + expectedValue + ", but got " + actualValue;
+			} else {
+				info = "expect the " + propertyName + " as " + expectedValue + ", but not found the property";
+			}
+			logger.info(info);
+			result.setResponseMessage(info);
+		}
+		return found;
 	}
 
 }
