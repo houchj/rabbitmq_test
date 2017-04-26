@@ -3,9 +3,7 @@ package com.sap.sme.occ.product;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
@@ -14,11 +12,12 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.samplers.SampleResult;
-import org.apache.jmeter.util.JMeterUtils;
 import org.apache.log.Logger;
 
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -26,8 +25,6 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
-
-import com.eclipsesource.json.*;
 
 public class MQTest {
 
@@ -49,10 +46,10 @@ public class MQTest {
 	}
 
 	public static void killAMQConnection() throws IOException {
-		mqConnection.close(0, "");
-		mqConnection.abort();
 		channel.close(0, "");
 		channel.abort();
+		mqConnection.close(0, "");
+		mqConnection.abort();
 	}
 
 	public static String startMQ(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars)
@@ -74,7 +71,13 @@ public class MQTest {
 		}
 
 		if (!mqStarted) {
-			startAMQConnection(logger, vars);
+			try {
+				startAMQConnection(logger, vars);
+			} catch (IOException e) {
+				logger.warn("exception while startAMQ connection, maybe previous connection is shutting down, retrying...", e);
+				Thread.sleep(100);
+				startAMQConnection(logger, vars);
+			}
 			ret = "MQ is connected successfully, waiting for messages";
 			logger.info(ret);
 			System.out.println(ret);
@@ -311,6 +314,127 @@ public class MQTest {
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Boolean expectedValue) throws Exception {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4);
+	}
+
+	public static JsonObject parseMessage(final SampleResult result, final Logger logger, String message,
+			String selectProp) throws Exception {
+		if (result == null || logger == null || StringUtils_isEmpty(message)) {
+			String info = "incorrect null parameters passed, the first 3 parameters are mandatory!!!";
+			if (logger != null) {
+				logger.warn(info);
+			}
+			if (result != null) {
+				result.setSuccessful(false);
+				result.setResponseCode("400");
+				result.setResponseMessage(info);
+			}
+			return null;
+		}
+		JsonArray array = Json.parse(message).asArray();
+		if (StringUtils_isEmpty(selectProp)) {
+			logger.info("no selectProp is set, so just return first message");
+			return array.get(0).asObject();
+		} else {
+			for (int i = 0; i < array.size(); i++) {
+				JsonObject object = array.get(i).asObject();
+				if (object.names().contains(selectProp)) {
+					return object;
+				}
+			}
+			String info = "cannot find json object by the property name: " + selectProp;
+			logger.warn(info);
+			if (result != null) {
+				result.setSuccessful(false);
+				result.setResponseCode("400");
+				result.setResponseMessage(info);
+			}
+			return null;
+		}
+	}
+	
+	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, String expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1);
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, Integer expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2);
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, Long expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3);
+	}
+
+	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, Boolean expectedValue) throws Exception {
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4);
+	}
+	
+	private static boolean assertProperty_Internal(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, Object expectedValue, int type) throws Exception {
+		if (StringUtils_isEmpty(propertyName) || result == null || logger == null || message == null) {
+			String info = "incorrect null parameters passed, the first 4 parameters are mandatory!!!";
+			if (logger != null) {
+				logger.warn(info);
+			}
+			if (result != null) {
+				result.setSuccessful(false);
+				result.setResponseCode("400");
+				result.setResponseMessage(info);
+			}
+			return false;
+		}
+		boolean found = false;
+		boolean foundProp = false;
+		Object actualValue = null;
+		JsonObject object = message;
+		if (object.names().contains(propertyName)) {
+			foundProp = true;
+			switch (type) {
+			case 1:// String
+				actualValue = object.get(propertyName).asString();
+				break;
+			case 2:// Integer
+				actualValue = object.get(propertyName).asInt();
+				break;
+			case 3:// Long
+				actualValue = object.get(propertyName).asLong();
+				break;
+			case 4:// Boolean
+				actualValue = object.get(propertyName).asBoolean();
+				break;
+			}
+			if (actualValue == null) {
+				if (expectedValue == null) {
+					logger.info("asseting " + propertyName + ", and both are null.");
+					found = true;
+				} else {
+					logger.info("asseting " + propertyName + ", but got null.");
+				}
+			} else {
+				if (actualValue.equals(expectedValue)) {
+					found = true;
+				}
+			}
+		}
+		if (found) {
+			result.setSuccessful(true);
+			result.setResponseCode("200");
+		} else {
+			result.setSuccessful(false);
+			result.setResponseCode("400");
+			String info;
+			if (foundProp) {
+				info = "expect the " + propertyName + " as " + expectedValue + ", but got " + actualValue;
+			} else {
+				info = "expect the " + propertyName + " as " + expectedValue + ", but not found the property";
+			}
+			logger.info(info);
+			result.setResponseMessage(info);
+		}
+		return found;
 	}
 	
 	private static boolean StringUtils_isEmpty(String str) {

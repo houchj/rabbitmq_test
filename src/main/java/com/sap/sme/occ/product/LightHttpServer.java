@@ -155,8 +155,8 @@ class ExitHandler implements HttpHandler {
 			server.stop(0);
 			LightHttpServer.getHttpThreadPool().shutdown();
 			MQTest.killAMQConnection();
-			StandardJMeterEngine.stopEngineNow();
-			System.exit(0);
+//			StandardJMeterEngine.stopEngineNow();
+//			System.exit(0);
 		}
 	}
 }
