@@ -3,14 +3,15 @@ package com.sap.sme.occ.product;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.log.Logger;
 
 import com.sun.net.httpserver.Headers;
@@ -68,17 +69,38 @@ class MessagesHandler implements HttpHandler {
 		this.server = server;
 	}
 
+	private Map<String, String> queryToMap(String query) {
+		Map<String, String> result = new HashMap<String, String>();
+		for (String param : query.split("&")) {
+			String pair[] = param.split("=");
+			if (pair.length > 1) {
+				result.put(pair[0], pair[1]);
+			} else {
+				result.put(pair[0], "");
+			}
+		}
+		return result;
+	}
+
 	public void handle(HttpExchange exchange) throws IOException {
+		Map<String, String> params = queryToMap(exchange.getRequestURI().getQuery());
+		String routingKey = params.get("routingKey");
+		System.out.println("######## routingKey is " + routingKey + " in http server.");
+
 		String requestMethod = exchange.getRequestMethod();
 		if (requestMethod.equalsIgnoreCase("GET")) {
 			Headers responseHeaders = exchange.getResponseHeaders();
 			responseHeaders.set("Content-Type", "application/json");
-			exchange.sendResponseHeaders(200, 0);
 
 			OutputStream responseBody = exchange.getResponseBody();
-			Headers requestHeaders = exchange.getRequestHeaders();
+			List<String> messages = MQTest.getMessages(routingKey);
+			String log = "###### routing key " + routingKey + " about to return to jmeter, got message count: "
+					+ messages.size();
+			LightHttpServer.getLogger().info(log);
+			System.out.println(log);
+			responseHeaders.set("X-Count", "" + messages.size());
+			exchange.sendResponseHeaders(200, 0);
 
-			List<String> messages = MQTest.getMessages();
 			String ret = "[";
 			for (int i = 0; i < messages.size(); i++) {
 				if (i > 0) {
@@ -114,7 +136,7 @@ class ClearHandler implements HttpHandler {
 			OutputStream responseBody = exchange.getResponseBody();
 			Headers requestHeaders = exchange.getRequestHeaders();
 
-			MQTest.getMessages().clear();
+			MQTest.clearMessages();
 
 			responseBody.write("clear message successfully".getBytes());
 
@@ -150,13 +172,17 @@ class ExitHandler implements HttpHandler {
 				responseBody.write(s.getBytes());
 			}
 			responseBody.close();
-			LightHttpServer.getLogger().info("try to exit current thread3!");
-			System.out.println("try to exit current thread3!");
+			LightHttpServer.getLogger().info("try to exit current thread3...");
+			System.out.println("try to exit current thread3...");
 			server.stop(0);
 			LightHttpServer.getHttpThreadPool().shutdown();
+			LightHttpServer.getLogger().info("internal http server is down, closing amq...");
+			System.out.println("internal http server is down, closing amq...");
 			MQTest.killAMQConnection();
-//			StandardJMeterEngine.stopEngineNow();
-//			System.exit(0);
+			LightHttpServer.getLogger().info("amq connection is down!");
+			System.out.println("amq connection is down!");
+			// StandardJMeterEngine.stopEngineNow();
+			// System.exit(0);
 		}
 	}
 }

@@ -2,7 +2,11 @@ package com.sap.sme.occ.product;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -11,6 +15,8 @@ import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.log.Logger;
@@ -28,6 +34,8 @@ import com.rabbitmq.client.Envelope;
 
 public class MQTest {
 
+	private static Logger firstLogger;
+
 	public static final int MQ_PORT = 5673; // 5672 for CD
 	public static final String MQ_HOST = "localhost";// "rabbitmq"; for CD
 	public static final int INTERNAL_HTTP_PORT = 58080;
@@ -39,21 +47,62 @@ public class MQTest {
 		return mqConnection;
 	}
 
-	private static List<String> messages = new ArrayList<String>();
+	private static Map<String, List<String>> messages = new HashMap<String, List<String>>();
 
-	public static List<String> getMessages() {
-		return messages;
+	public static void clearMessages() {
+		messages.clear();
+	}
+
+	public static List<String> getMessages(String routingKey) {
+		if (routingKey == null || routingKey.length() == 0) {
+			return Collections.EMPTY_LIST;
+		}
+		Set<String> keys = messages.keySet();
+		for (String key : keys) {
+			if (key.toLowerCase().startsWith(routingKey.toLowerCase())) {
+				String log = routingKey + " matches " + key;
+				if (firstLogger != null) {
+					firstLogger.info(log);
+				}
+				System.out.println(log);
+				return messages.get(key);
+			}
+		}
+		String log = routingKey + " has no matches";
+		if (firstLogger != null) {
+			firstLogger.info(log);
+		}
+		System.out.println(log);
+		return Collections.EMPTY_LIST;
+	}
+
+	private static void putMessage(String routingKey, String message) {
+		List<String> messageList = messages.get(routingKey);
+		if (messageList == null) {
+			messageList = new ArrayList<String>();
+			messages.put(routingKey, messageList);
+		}
+		messageList.add(message);
 	}
 
 	public static void killAMQConnection() throws IOException {
-		channel.close(0, "");
+		channel.close(0, "close amq connection as stopMQ() is called");
 		channel.abort();
-		mqConnection.close(0, "");
+		mqConnection.close(0, "close amq connection as stopMQ() is called");
 		mqConnection.abort();
 	}
 
-	public static String startMQ(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars)
-			throws Exception {
+	/**
+	 * by jmeter
+	 * 
+	 * @param logger
+	 * @param vars
+	 * @param routingKeys
+	 * @return
+	 * @throws Exception
+	 */
+	public static String startMQ(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars,
+			String... routingKeys) throws Exception {
 		String ret = "";
 		boolean mqStarted = false;
 		try {
@@ -72,22 +121,24 @@ public class MQTest {
 
 		if (!mqStarted) {
 			try {
-				startAMQConnection(logger, vars);
+				startAMQConnection(logger, vars, routingKeys);
 			} catch (IOException e) {
-				logger.warn("exception while startAMQ connection, maybe previous connection is shutting down, retrying...", e);
+				logger.warn(
+						"exception while startAMQ connection, maybe previous connection is shutting down, retrying...",
+						e);
 				Thread.sleep(100);
-				startAMQConnection(logger, vars);
+				startAMQConnection(logger, vars, routingKeys);
 			}
 			ret = "MQ is connected successfully, waiting for messages";
 			logger.info(ret);
 			System.out.println(ret);
 		}
-
+		firstLogger = logger;
 		return ret;
 	}
 
-	private static void startAMQConnection(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars)
-			throws Exception {
+	private static void startAMQConnection(final Logger logger, final org.apache.jmeter.threads.JMeterVariables vars,
+			String... routingKeys) throws Exception {
 		String host = vars.get("MQTest.mqhost");
 		if (host != null && host.length() > 0) {
 			logger.info("got host " + host + " from user defined variable...");
@@ -121,7 +172,23 @@ public class MQTest {
 
 		channel.exchangeDeclare("SharedExchange", "topic", true);
 		String queueName = channel.queueDeclare().getQueue();
-		channel.queueBind(queueName, "SharedExchange", "Product.UPDATE.*.#");
+		if (routingKeys != null && routingKeys.length > 0) {
+			for (int i = 0; i < routingKeys.length; i++) {
+				String log = "binding routing key: " + routingKeys[i];
+				if (logger != null) {
+					logger.info(log);
+				}
+				System.out.println(log);
+				channel.queueBind(queueName, "SharedExchange", routingKeys[i]);
+			}
+		} else {
+			String log = "the param routingKeys is not set, you may not get any messages.";
+			if (logger != null) {
+				logger.info(log);
+			}
+			System.out.println(log);
+		}
+		// channel.queueBind(queueName, "SharedExchange", "Product.UPDATE.*.#");
 
 		messages.clear();
 
@@ -129,9 +196,10 @@ public class MQTest {
 			@Override
 			public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties,
 					byte[] body) throws IOException {
+				String routingKey = envelope.getRoutingKey();
 				String message = new String(body, "UTF-8");
-				messages.add(message);
-				String output = " [x] Received '" + message + "'";
+				MQTest.putMessage(routingKey, message);
+				String output = " [x] Received, routingKey:" + routingKey + " '" + message + "'";
 				System.out.println(output);
 				if (logger != null) {
 					logger.info(output);
@@ -141,6 +209,12 @@ public class MQTest {
 		channel.basicConsume(queueName, true, consumer);
 	}
 
+	/**
+	 * by jmeter
+	 * 
+	 * @param logger
+	 * @throws Exception
+	 */
 	public static void stopMQ(final Logger logger) throws Exception {
 		CloseableHttpClient httpclient = HttpClients.createDefault();
 		try {
@@ -167,15 +241,23 @@ public class MQTest {
 		}
 	}
 
-	public static String getMessage(final Logger logger) throws Exception {
-		String message = "";
+	/**
+	 * by jmeter
+	 * 
+	 * @param logger
+	 * @return
+	 * @throws Exception
+	 */
+	public static String getMessage(final Logger logger, String routingKey, int expectedCount) throws Exception {
+		AMessage message = new AMessage();
 		long sleep = 100;
 		int sleepCount = 0;
-		while (message == null || message.equals("") || message.equals("[]")) {
+		while (message == null || message.getMessage().equals("") || message.getMessage().equals("[]")
+				|| message.getCount() < expectedCount) {
 			if (sleepCount < 3) {
 				Thread.sleep(sleep);
 				try {
-					message = getAMessage(logger);
+					message = getAMessage(logger, routingKey);
 				} catch (Exception e) {
 					logger.warn(e.getMessage(), e);
 					logger.warn("trying again ...");
@@ -187,36 +269,83 @@ public class MQTest {
 				break;
 			}
 		}
-		return message;
+		return message.getMessage();
 	}
 
-	private static String getAMessage(final Logger logger) throws Exception {
+	static class AMessage {
+		private int count = 0;
+
+		public int getCount() {
+			return count;
+		}
+
+		public void setCount(int count) {
+			this.count = count;
+		}
+
+		public String getMessage() {
+			return message;
+		}
+
+		public void setMessage(String message) {
+			this.message = message;
+		}
+
+		private String message = "";
+	}
+
+	private static AMessage getAMessage(final Logger logger, String routingKey) throws Exception {
 		CloseableHttpClient httpclient = HttpClients.createDefault();
 		try {
-			HttpGet httpget = new HttpGet("http://localhost:" + INTERNAL_HTTP_PORT + "/messages");
+			HttpGet httpget = new HttpGet(
+					"http://localhost:" + INTERNAL_HTTP_PORT + "/messages?routingKey=" + routingKey);
+			// org.apache.commons.httpclient.params.HttpClientParams params =
+			// new org.apache.commons.httpclient.params.HttpClientParams();
+			// params.setParameter("routingKey", routingKey);
+			// httpclient.
+			// HttpParams params = new BasicHttpParams();
+			// params.setParameter("routingKey", routingKey);
+			// httpget.setParams(params);
 			logger.info("Executing request " + httpget.getRequestLine());
 			// Create a custom response handler
-			ResponseHandler<String> responseHandler = new ResponseHandler<String>() {
-				public String handleResponse(final HttpResponse response) throws ClientProtocolException, IOException {
+			ResponseHandler<AMessage> responseHandler = new ResponseHandler<AMessage>() {
+				public AMessage handleResponse(final HttpResponse response)
+						throws ClientProtocolException, IOException {
+					org.apache.http.Header[] headers = response.getHeaders("X-Count");
+					String countStr = headers[0].getValue();
+					int count = Integer.parseInt(countStr);
+
+					String message = "";
 					int status = response.getStatusLine().getStatusCode();
 					if (status >= 200 && status < 300) {
 						HttpEntity entity = response.getEntity();
-						return entity != null ? EntityUtils.toString(entity) : null;
+						message = entity != null ? EntityUtils.toString(entity) : null;
 					} else {
 						logger.warn("Unexpected response status: " + status);
 						throw new ClientProtocolException("Unexpected response status: " + status);
 					}
+					AMessage aMessage = new AMessage();
+					aMessage.setMessage(message);
+					aMessage.setCount(count);
+					return aMessage;
 				}
 			};
-			String responseBody = httpclient.execute(httpget, responseHandler);
+			AMessage aMessage = httpclient.execute(httpget, responseHandler);
 			logger.info("----------------------------------------");
-			logger.info(responseBody);
-			return responseBody;
+			logger.info(aMessage.getMessage());
+			return aMessage;
 		} finally {
 			httpclient.close();
 		}
 	}
 
+	/**
+	 * by jmeter
+	 * 
+	 * @param logger
+	 * @return
+	 * @throws Exception
+	 */
 	public static String clearMessage(final Logger logger) throws Exception {
 		String message = "";
 		boolean success = true;
@@ -274,7 +403,8 @@ public class MQTest {
 		}
 	}
 
-	///////////////////////////////// Assertion Utils
+	///////////////////////////////// Assertion Utils, all below are used by
+	///////////////////////////////// jmeter
 	///////////////////////////////// /////////////////////////////////////////
 	public static boolean assertCount(final SampleResult result, final Logger logger, String message, int count)
 			throws Exception {
@@ -298,22 +428,22 @@ public class MQTest {
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, String expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1);
+		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 1);
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Integer expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2);
+		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 2);
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Long expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3);
+		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 3);
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Boolean expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4);
+		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 4);
 	}
 
 	public static JsonObject parseMessage(final SampleResult result, final Logger logger, String message,
@@ -351,29 +481,87 @@ public class MQTest {
 			return null;
 		}
 	}
-	
+
+	////////////////////// another higher efficiency assert utils
+	////////////////////// //////////////////
+	static class AssertResult {
+		public AssertResult(boolean found, Object actualValue) {
+			this.found = found;
+			this.actualValue = actualValue;
+		}
+
+		public boolean isFound() {
+			return found;
+		}
+
+		public void setFound(boolean found) {
+			this.found = found;
+		}
+
+		public Object getActualValue() {
+			return actualValue;
+		}
+
+		public void setActualValue(Object actualValue) {
+			this.actualValue = actualValue;
+		}
+
+		private boolean found;
+		private Object actualValue;
+	}
+
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, String expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1);
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1).isFound();
+	}
+
+	// more advanced, multi expected values
+	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
+			String propertyName, String... expectedValues) throws Exception {
+
+		boolean found = false;
+		List<String> values = new ArrayList<String>();
+		String actualValue = "";
+		for (String expectedValue : expectedValues) {
+			values.add(expectedValue);
+			AssertResult assertResult = assertProperty_Internal(result, logger, message, propertyName, expectedValue,
+					1);
+			found = assertResult.isFound();
+			actualValue = assertResult.getActualValue().toString();
+			if (found) {
+				break;
+			}
+		}
+		if (!found) {
+			String info = "expect the " + propertyName + " as " + String.join(", ", values) + ", but got "
+					+ actualValue;
+			result.setSuccessful(false);
+			result.setResponseCode("400");
+			result.setResponseMessage(info);
+		} else {
+			result.setSuccessful(true);
+			result.setResponseCode("200");
+		}
+		return found;
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Integer expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2);
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2).isFound();
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Long expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3);
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3).isFound();
 	}
 
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Boolean expectedValue) throws Exception {
-		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4);
+		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4).isFound();
 	}
-	
-	private static boolean assertProperty_Internal(final SampleResult result, final Logger logger, JsonObject message,
-			String propertyName, Object expectedValue, int type) throws Exception {
+
+	private static AssertResult assertProperty_Internal(final SampleResult result, final Logger logger,
+			JsonObject message, String propertyName, Object expectedValue, int type) throws Exception {
 		if (StringUtils_isEmpty(propertyName) || result == null || logger == null || message == null) {
 			String info = "incorrect null parameters passed, the first 4 parameters are mandatory!!!";
 			if (logger != null) {
@@ -384,7 +572,7 @@ public class MQTest {
 				result.setResponseCode("400");
 				result.setResponseMessage(info);
 			}
-			return false;
+			return new AssertResult(false, "");
 		}
 		boolean found = false;
 		boolean foundProp = false;
@@ -434,14 +622,14 @@ public class MQTest {
 			logger.info(info);
 			result.setResponseMessage(info);
 		}
-		return found;
+		return new AssertResult(found, actualValue);
 	}
-	
+
 	private static boolean StringUtils_isEmpty(String str) {
 		return str == null || str.length() == 0;
 	}
 
-	private static boolean assertProperty_Internal(final SampleResult result, final Logger logger, String message,
+	private static boolean assertProperty_Internal2(final SampleResult result, final Logger logger, String message,
 			String propertyName, Object expectedValue, int type) throws Exception {
 		if (StringUtils_isEmpty(propertyName) || result == null || logger == null || StringUtils_isEmpty(message)) {
 			String info = "incorrect null parameters passed, the first 4 parameters are mandatory!!!";
