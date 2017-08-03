@@ -134,5 +134,10 @@
 			<artifactId>minimal-json</artifactId>
 			<version>0.9.4</version>
 		</dependency>
+		<dependency>
+			<groupId>com.sap.sme.anw</groupId>
+			<artifactId>vault-common-java</artifactId>
+			<version>1.0.2</version>
+		</dependency>
 	</dependencies>
 </project>

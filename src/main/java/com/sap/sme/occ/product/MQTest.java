@@ -1,5 +1,9 @@
 package com.sap.sme.occ.product;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,8 +19,6 @@ import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.params.BasicHttpParams;
-import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.log.Logger;
@@ -31,6 +33,9 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
+import com.sap.sme.vault.infra.ConfigurationProvider;
+import com.sap.sme.vault.infra.impl.ConfigurationProviderSingleton;
+import com.sap.sme.vault.infra.model.NameAndPwd;
 
 public class MQTest {
 
@@ -38,7 +43,9 @@ public class MQTest {
 
 	public static final int MQ_PORT = 5673; // 5672 for CD
 	public static final String MQ_HOST = "localhost";// "rabbitmq"; for CD
+	public static final String MQ_PASSWORD = "Initial0";//Random password for CD
 	public static final int INTERNAL_HTTP_PORT = 58080;
+	public static final String MQCREDSFilePath = "/etc/mqCreds";
 
 	private static Connection mqConnection;
 	private static Channel channel;
@@ -161,12 +168,39 @@ public class MQTest {
 		} else {
 			logger.info("got port " + intPort + " from user defined variable...");
 		}
+		
+		String password = vars.get("MQTest.mqpassword");		
+		if(password != null && password.length() > 0) {
+			
+			logger.info("got password: " + password + " from user defined variable...");
+			if(!password.equals(MQ_PASSWORD))				
+			{
+				logger.info("incorrect password from user defined variable, use Initial0 as default");
+				password = MQ_PASSWORD;
+			}
+
+		} else {
+			logger.info("no password from user defined variable, got password from file...");
+			String passwordFromFile = getMQPasswordFromFile(logger);
+			
+			if(passwordFromFile != null && passwordFromFile.length() > 0){				
+				password = passwordFromFile;
+				logger.info("passwordFromFile is: " + passwordFromFile);
+			}
+			else{
+				logger.info("no password, got password from valut...");
+				password = getMQPassword(logger);
+			}		
+			
+		}
 
 		ConnectionFactory factory = new ConnectionFactory();
+		logger.info("call ConnectionFactory, password is: " + password);
 		factory.setHost(host);
 		factory.setPort(intPort);
 		factory.setUsername("root");
-		factory.setPassword("Initial0");
+		//factory.setPassword("Initial0");
+		factory.setPassword(password);
 		mqConnection = factory.newConnection();
 		channel = mqConnection.createChannel();
 
@@ -208,6 +242,74 @@ public class MQTest {
 		};
 		channel.basicConsume(queueName, true, consumer);
 	}
+
+	public static String getMQPassword(Logger logger) {
+		
+		String mqPassword = "";
+		
+		try{			
+			ConfigurationProvider provider = ConfigurationProviderSingleton.getInstance();
+			NameAndPwd mqCreds = provider.getRabbitMQCreds();
+			logger.info("Get user name and password from valut: " + mqCreds.getUsername() + ", " + mqCreds.getPassword());
+			mqPassword = mqCreds.getPassword();
+			
+			saveMQPasswordToFile(logger, mqPassword);			
+						
+		}
+		catch(Exception e){
+			logger.warn("Failed to get MQ credential from Vault.");
+			logger.warn(e.getMessage(), e);			
+		}
+		
+		return mqPassword;
+	}
+
+
+
+	private static void saveMQPasswordToFile(Logger logger,String password) {
+		
+		try{
+			logger.info("start to save mqpassword to file: " + MQCREDSFilePath + ", mqpassword is " + password);			
+			BufferedWriter out = new BufferedWriter(new FileWriter(MQCREDSFilePath));
+			out.write(password);
+			out.close();
+			logger.info("mqPassword is saved.......");
+			}catch (IOException e){
+				logger.warn("failed to save mqPassword to file.");
+				logger.warn(e.getMessage(), e);				
+			}
+
+	}
+	
+	private static String getMQPasswordFromFile(Logger logger){
+		
+		String line = null;
+	    //String ls = System.getProperty("line.separator");
+	    String content =  "";
+	    
+	    try {
+	    	logger.info("start to get mqpassword from file: " + MQCREDSFilePath);
+		    BufferedReader reader = new BufferedReader(new FileReader(MQCREDSFilePath));
+		    StringBuilder stringBuilder = new StringBuilder();
+		    
+	    	while((line = reader.readLine()) != null) 
+	    	{
+	            stringBuilder.append(line);
+	            //stringBuilder.append(ls);
+	        }	    	
+	        content = stringBuilder.toString();
+	        logger.info("Password is: " + content);
+	        reader.close();	
+
+	    } catch(IOException e){
+			logger.warn("Failed to get MQ Password from file.");
+			logger.warn(e.getMessage(), e);			
+		}
+	    	    
+	    return content;
+
+	}
+		
 
 	/**
 	 * by jmeter
