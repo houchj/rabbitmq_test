@@ -37,30 +37,36 @@ import com.sap.sme.vault.infra.ConfigurationProvider;
 import com.sap.sme.vault.infra.impl.ConfigurationProviderSingleton;
 import com.sap.sme.vault.infra.model.NameAndPwd;
 
+/**
+ * 
+ * @author I075885(changjun.hou@sap.com)
+ * 
+ * <p><h3>For quick asynchronous event test and assertion in micro service architecture.</h3>
+ * <p><h3>Please refer to java doc for help.</h3>
+ */
 public class MQTest {
 
 	private static Logger firstLogger;
 
-	public static final int MQ_PORT = 5673; // 5672 for CD
-	public static final String MQ_HOST = "localhost";// "rabbitmq"; for CD
-	public static final String MQ_PASSWORD = "Initial0";//Random password for CD
-	public static final int INTERNAL_HTTP_PORT = 58080;
-	public static final String MQCREDSFilePath = "/etc/mqCreds";
+	static final int MQ_PORT = 5673; // 5672 for CD
+	static final String MQ_HOST = "localhost";// "rabbitmq"; for CD
+	static final String MQ_PASSWORD = "Initial0";//Random password for CD
+	static final int INTERNAL_HTTP_PORT = 58080;
+	static final String MQCREDSFilePath = "/etc/mqCreds";
 
 	private static Connection mqConnection;
 	private static Channel channel;
 
-	public static Connection getMqConnection() {
-		return mqConnection;
-	}
-
 	private static Map<String, List<String>> messages = new HashMap<String, List<String>>();
 
-	public static void clearMessages() {
+	static void clearMessages() {
 		messages.clear();
 	}
 
-	public static List<String> getMessages(String routingKey) {
+	private MQTest() {
+	}
+
+	static List<String> getMessages(String routingKey) {
 		if (routingKey == null || routingKey.length() == 0) {
 			return Collections.EMPTY_LIST;
 		}
@@ -92,7 +98,7 @@ public class MQTest {
 		messageList.add(message);
 	}
 
-	public static void killAMQConnection() throws IOException {
+	static void killAMQConnection() throws IOException {
 		channel.close(0, "close amq connection as stopMQ() is called");
 		channel.abort();
 		mqConnection.close(0, "close amq connection as stopMQ() is called");
@@ -100,7 +106,7 @@ public class MQTest {
 	}
 
 	/**
-	 * by jmeter
+	 * @jmeterUsed
 	 * 
 	 * @param logger
 	 * @param vars
@@ -243,7 +249,7 @@ public class MQTest {
 		channel.basicConsume(queueName, true, consumer);
 	}
 
-	public static String getMQPassword(Logger logger) {
+	private static String getMQPassword(Logger logger) {
 		
 		String mqPassword = "";
 		
@@ -264,8 +270,6 @@ public class MQTest {
 		return mqPassword;
 	}
 
-
-
 	private static void saveMQPasswordToFile(Logger logger,String password) {
 		
 		try{
@@ -278,7 +282,6 @@ public class MQTest {
 				logger.warn("failed to save mqPassword to file.");
 				logger.warn(e.getMessage(), e);				
 			}
-
 	}
 	
 	private static String getMQPasswordFromFile(Logger logger){
@@ -312,7 +315,7 @@ public class MQTest {
 		
 
 	/**
-	 * by jmeter
+	 * @jmeterUsed
 	 * 
 	 * @param logger
 	 * @throws Exception
@@ -344,11 +347,7 @@ public class MQTest {
 	}
 
 	/**
-	 * by jmeter
-	 * 
-	 * @param logger
-	 * @return
-	 * @throws Exception
+	 * @jmeterUsed
 	 */
 	public static String getMessage(final Logger logger, String routingKey, int expectedCount) throws Exception {
 		AMessage message = new AMessage();
@@ -442,7 +441,7 @@ public class MQTest {
 	}
 
 	/**
-	 * by jmeter
+	 * @jmeterUsed
 	 * 
 	 * @param logger
 	 * @return
@@ -508,6 +507,9 @@ public class MQTest {
 	///////////////////////////////// Assertion Utils, all below are used by
 	///////////////////////////////// jmeter
 	///////////////////////////////// /////////////////////////////////////////
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertCount(final SampleResult result, final Logger logger, String message, int count)
 			throws Exception {
 		JsonArray array = Json.parse(message).asArray();
@@ -528,26 +530,41 @@ public class MQTest {
 		}
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, String expectedValue) throws Exception {
 		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 1);
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Integer expectedValue) throws Exception {
 		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 2);
 	}
-
+	
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Long expectedValue) throws Exception {
 		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 3);
 	}
-
+	
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, String message,
 			String propertyName, Boolean expectedValue) throws Exception {
 		return assertProperty_Internal2(result, logger, message, propertyName, expectedValue, 4);
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static JsonObject parseMessage(final SampleResult result, final Logger logger, String message,
 			String selectProp) throws Exception {
 		if (result == null || logger == null || StringUtils_isEmpty(message)) {
@@ -612,12 +629,18 @@ public class MQTest {
 		private Object actualValue;
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, String expectedValue) throws Exception {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 1).isFound();
 	}
 
 	// more advanced, multi expected values
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, String... expectedValues) throws Exception {
 
@@ -647,21 +670,33 @@ public class MQTest {
 		return found;
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Integer expectedValue) throws Exception {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 2).isFound();
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Long expectedValue) throws Exception {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 3).isFound();
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	public static boolean assertProperty(final SampleResult result, final Logger logger, JsonObject message,
 			String propertyName, Boolean expectedValue) throws Exception {
 		return assertProperty_Internal(result, logger, message, propertyName, expectedValue, 4).isFound();
 	}
 
+	/**
+	 * @jmeterUsed
+	 */
 	private static AssertResult assertProperty_Internal(final SampleResult result, final Logger logger,
 			JsonObject message, String propertyName, Object expectedValue, int type) throws Exception {
 		if (StringUtils_isEmpty(propertyName) || result == null || logger == null || message == null) {
