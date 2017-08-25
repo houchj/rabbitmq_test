@@ -355,7 +355,7 @@ public class MQTest {
 		int sleepCount = 0;
 		while (message == null || message.getMessage().equals("") || message.getMessage().equals("[]")
 				|| message.getCount() < expectedCount) {
-			if (sleepCount < 3) {
+			if (sleepCount < 4) {
 				Thread.sleep(sleep);
 				try {
 					message = getAMessage(logger, routingKey);
@@ -364,7 +364,7 @@ public class MQTest {
 					logger.warn("trying again ...");
 				}
 				sleepCount++;
-				sleep = sleep + sleepCount * 100;
+				sleep = sleep + sleepCount * 300;
 			} else {
 				logger.info("still can not get message after trying " + sleepCount + " times...");
 				break;
