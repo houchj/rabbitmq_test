@@ -139,6 +139,11 @@
 			<artifactId>vault-common-java</artifactId>
 			<version>1.0.2</version>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.amqp</groupId>
+			<artifactId>spring-rabbit</artifactId>
+			<version>1.7.1.RELEASE</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<plugins>
@@ -155,7 +160,8 @@
 						<tag>
 							<name>jmeterUsed</name>
 							<placement>a</placement>
-							<head>Jmeter Used! This interface can be used by jmeter test cases!</head>
+							<head>Jmeter Used! This interface can be used by jmeter test
+								cases!</head>
 						</tag>
 					</tags>
 				</configuration>
