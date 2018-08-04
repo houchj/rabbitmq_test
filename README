@@ -1,4 +1,4 @@
-for creating a lib that can test events in jmeter Edit
+for creating a lib that can test events in jmeter test cases in a micro service infrastruture.
 
 
 MQTest.startMQ(...);
